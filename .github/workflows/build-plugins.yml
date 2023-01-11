@@ -1,10 +1,11 @@
-name: Build Plugins
+name: Build Plugins in Parallel
 
 on:
   push:
     branches:
       - main
       - backend-builder
+      - parallelize-ci
     paths:
       - "plugins/**"
       - ".github/workflows/build-plugins.yml"
@@ -17,13 +18,38 @@ on:
         description: Re-upload the plugins to the store
 
 jobs:
+  find_plugins:
+    outputs:
+      plugins: ${{ steps.find_plugins.outputs.plugins }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        if: ${{ !env.ACT }}
+        uses: actions/checkout@8230315d06ad95c617244d2f265d237a1682d445
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Find plugins to be built
+        run: |
+          echo "plugins=$(find ./plugins -mindepth 1 -maxdepth 1 -type d)" >> $GITHUB_OUTPUT
+
   build:
     name: Build updated plugins
     runs-on: ubuntu-latest
-    environment:
-      name: ${{ (github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.upload))) && 'env' || 'testing_env' }}    
+    needs:
+      - find_plugins
+    strategy:
+      matrix:
+        plugin: ${{ needs.find_plugins.outputs.plugins }}
 
     steps:
+    - name: Matrix => (${{ matrix.plugin }}
+      run: |
+        echo ${{ matrix.service }}
+        echo ${{ matrix.version }}
+
     - name: Checkout
       if: ${{ !env.ACT }}
       uses: actions/checkout@8230315d06ad95c617244d2f265d237a1682d445
@@ -32,32 +58,6 @@ jobs:
         fetch-depth: 0
         submodules: "recursive"
         token: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Get changed files
-      id: changed-files
-      uses: tj-actions/changed-files@210f4edecfff9e901066850eb306b947d09092bc
-      with:
-        sha: ${{ github.event.pull_request.head.sha || github.sha }}
-        separator: ","
-        files: |
-          plugins/*
-          .github/workflows/build-plugins.yml
-
-    - name: Cache Docker images
-      if: ${{ !env.ACT }}
-      uses: satackey/action-docker-layer-caching@46d2c640b1d8ef50d185452ad6fb324e6bd1d052
-
-    - name: Login to GitHub Container Registry
-      run: |
-        echo $GITHUB_TOKEN | docker login ghcr.io -u SteamDeckHomebrew --password-stdin
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Wait for other runs to complete
-      if: ${{ !env.ACT }}
-      uses: pau1ocampos/turnstyle@17e7c2e349edeb2fc92d15e99f389c6011e02956
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Pull frontend builder image
       run: docker pull ghcr.io/steamdeckhomebrew/builder:latest
