@@ -38,7 +38,7 @@ jobs:
           echo "plugins=$PLUGINS" >> $GITHUB_OUTPUT
 
   build:
-    name: Build updated plugins
+    name: Build plugin
     runs-on: ubuntu-latest
     needs:
       - find_plugins
@@ -47,11 +47,6 @@ jobs:
         plugin: ${{ fromJSON(needs.find_plugins.outputs.plugins) }}
 
     steps:
-    - name: Matrix => (${{ matrix.plugin }}
-      run: |
-        echo ${{ matrix.service }}
-        echo ${{ matrix.version }}
-
     - name: Checkout
       if: ${{ !env.ACT }}
       uses: actions/checkout@8230315d06ad95c617244d2f265d237a1682d445
@@ -99,63 +94,59 @@ jobs:
     
     - name: Build plugin backends
       run: |
-        IFS=' ' read -ra files <<< "${{ steps.list-files.outputs.edited_files }}"
+        plugin=${{ matrix.plugin }}
         pushd plugins
-        for plugin in $(printf "%s\n" "${files[@]}" | sort -u); do
-          pushd $plugin
-          echo "Detecting backend for plugin $plugin"
-          dockerfile_exists="false"
-          entrypoint_exists="false"
-          docker_name="backend-${plugin,,}"
-          # [ -d $PWD/backend ] && echo "$(ls -lla $PWD/backend | grep Dockerfile)"
-          [ -f $PWD/backend/Dockerfile ] && dockerfile_exists=true
-          [ -f $PWD/backend/entrypoint.sh ] && entrypoint_exists=true
-          # check for Dockerfile
-          if [[ "$dockerfile_exists" == "true" ]]; then
-            echo "Grabbing provided dockerfile."
-            echo "Building provided Dockerfile."
-            docker build -f $PWD/backend/Dockerfile -t "$docker_name" .
-            mkdir -p /tmp/output/$plugin/backend/out
-            # check entrypoint script exists
-            if [[ "$entrypoint_exists" == "true" ]]; then
-              echo "Running docker image "$docker_name" with provided entrypoint script."
-              docker run --rm -i -v $PWD/backend:/backend -v /tmp/output/$plugin/backend/out:/backend/out --entrypoint /backend/entrypoint.sh "$docker_name"
-              mkdir -p /tmp/output/$plugin/bin
-              cp -r /tmp/output/$plugin/backend/out/. /tmp/output/$plugin/bin
-            else
-              echo "Running docker image "$docker_name" with entrypoint script specified in Dockerfile."
-              docker run --rm -i -v $PWD/backend:/backend -v /tmp/output/$plugin/backend/out:/backend/out "$docker_name"
-              mkdir -p /tmp/output/$plugin/bin
-              cp -r /tmp/output/$plugin/backend/out/. /tmp/output/$plugin/bin
-            fi
-            docker image rm "$docker_name"
-            echo "Built $plugin backend"
-          # Dockerfile doesn't exist but entrypoint script does, run w/ default image
-          elif [[ "$dockerfile_exists" == "false" && "$entrypoint_exists" == "true" ]]; then
-            echo "Grabbing default docker image and using provided entrypoint script."
-            docker run --rm -i -v $PWD/backend:/backend -v /tmp/output/$plugin/backend/out:/backend/out ghcr.io/steamdeckhomebrew/holo-base:latest
+        pushd $plugin
+        echo "Detecting backend for plugin $plugin"
+        dockerfile_exists="false"
+        entrypoint_exists="false"
+        docker_name="backend-${plugin,,}"
+        # [ -d $PWD/backend ] && echo "$(ls -lla $PWD/backend | grep Dockerfile)"
+        [ -f $PWD/backend/Dockerfile ] && dockerfile_exists=true
+        [ -f $PWD/backend/entrypoint.sh ] && entrypoint_exists=true
+        # check for Dockerfile
+        if [[ "$dockerfile_exists" == "true" ]]; then
+          echo "Grabbing provided dockerfile."
+          echo "Building provided Dockerfile."
+          docker build -f $PWD/backend/Dockerfile -t "$docker_name" .
+          mkdir -p /tmp/output/$plugin/backend/out
+          # check entrypoint script exists
+          if [[ "$entrypoint_exists" == "true" ]]; then
+            echo "Running docker image "$docker_name" with provided entrypoint script."
+            docker run --rm -i -v $PWD/backend:/backend -v /tmp/output/$plugin/backend/out:/backend/out --entrypoint /backend/entrypoint.sh "$docker_name"
             mkdir -p /tmp/output/$plugin/bin
-            cp /tmp/output/$plugin/backend/out/. /tmp/output/$plugin/bin
-            echo "Built $plugin backend"
+            cp -r /tmp/output/$plugin/backend/out/. /tmp/output/$plugin/bin
           else
-            echo "Plugin $plugin does not have a backend"
+            echo "Running docker image "$docker_name" with entrypoint script specified in Dockerfile."
+            docker run --rm -i -v $PWD/backend:/backend -v /tmp/output/$plugin/backend/out:/backend/out "$docker_name"
+            mkdir -p /tmp/output/$plugin/bin
+            cp -r /tmp/output/$plugin/backend/out/. /tmp/output/$plugin/bin
           fi
-          # ls -lla /tmp/output/$plugin
-          popd
-        done
+          docker image rm "$docker_name"
+          echo "Built $plugin backend"
+        # Dockerfile doesn't exist but entrypoint script does, run w/ default image
+        elif [[ "$dockerfile_exists" == "false" && "$entrypoint_exists" == "true" ]]; then
+          echo "Grabbing default docker image and using provided entrypoint script."
+          docker run --rm -i -v $PWD/backend:/backend -v /tmp/output/$plugin/backend/out:/backend/out ghcr.io/steamdeckhomebrew/holo-base:latest
+          mkdir -p /tmp/output/$plugin/bin
+          cp /tmp/output/$plugin/backend/out/. /tmp/output/$plugin/bin
+          echo "Built $plugin backend"
+        else
+          echo "Plugin $plugin does not have a backend"
+        fi
+        # ls -lla /tmp/output/$plugin
+        popd
         popd
 
     - name: Build plugin frontends
       run: |
-        IFS=' ' read -ra files <<< "${{ steps.list-files.outputs.edited_files }}"
         pushd plugins
-        for plugin in $(printf "%s\n" "${files[@]}" | sort -u); do
-          pushd $plugin
-          docker run --rm -i -v $PWD:/plugin -v /tmp/output/$plugin:/out ghcr.io/steamdeckhomebrew/builder:latest
-          echo Built $plugin frontend
-          ls -lla /tmp/output/$plugin
-          popd
-        done
+        plugin=${{ matrix.plugin }}
+        pushd $plugin
+        docker run --rm -i -v $PWD:/plugin -v /tmp/output/$plugin:/out ghcr.io/steamdeckhomebrew/builder:latest
+        echo Built $plugin frontend
+        ls -lla /tmp/output/$plugin
+        popd
         popd
         
     - name: Zip Plugins
