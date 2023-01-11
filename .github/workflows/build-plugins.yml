@@ -34,17 +34,8 @@ jobs:
       - id: find_plugins
         name: Find plugins to be built
         run: |
-          PLUGINS=$(find ./plugins -mindepth 1 -maxdepth 1 -type d | jq -Rsc 'split("\n")[:-1]')
-          echo "plugins=$PLUGINS"
+          PLUGINS=$(find ./plugins -mindepth 1 -maxdepth 1 -type d -print0 | xargs -0 -n1 -- basename | jq -Rsc 'split("\n")[:-1]')
           echo "plugins=$PLUGINS" >> $GITHUB_OUTPUT
-
-  my_echo:
-    runs-on: ubuntu-latest
-    needs:
-      - find_plugins
-    steps:
-      - name: Echo previous outputs
-        run: echo "${{ toJSON(needs.find_plugins.outputs) }}"
 
   build:
     name: Build updated plugins
