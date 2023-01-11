@@ -31,9 +31,20 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Find plugins to be built
+      - id: find_plugins
+        name: Find plugins to be built
         run: |
-          echo "plugins=$(find ./plugins -mindepth 1 -maxdepth 1 -type d)" >> $GITHUB_OUTPUT
+          PLUGINS=$(find ./plugins -mindepth 1 -maxdepth 1 -type d | jq -Rsc 'split("\n")[:-1]')
+          echo "plugins=$PLUGINS"
+          echo "plugins=$PLUGINS" >> $GITHUB_OUTPUT
+
+  my_echo:
+    runs-on: ubuntu-latest
+    needs:
+      - find_plugins
+    steps:
+      - name: Echo previous outputs
+        run: echo "${{ toJSON(needs.find_plugins.outputs) }}"
 
   build:
     name: Build updated plugins
@@ -42,7 +53,7 @@ jobs:
       - find_plugins
     strategy:
       matrix:
-        plugin: ${{ needs.find_plugins.outputs.plugins }}
+        plugin: ${{ fromJSON(needs.find_plugins.outputs.plugins) }}
 
     steps:
     - name: Matrix => (${{ matrix.plugin }}
