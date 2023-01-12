@@ -227,12 +227,19 @@ jobs:
         plugin: ${{ fromJSON(needs.find_plugins.outputs.plugins) }}
     steps:
     - name: Wait for build to succeed
-      uses: lewagon/wait-on-check-action@v1.2.0
+      id: check-status
+      uses: fountainhead/action-wait-for-check@v1.1.0
       with:
-        ref: ${{ github.ref }}
-        check-name: 'Build plugin (${{ matrix.plugin }})'
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-        wait-interval: 10
+        ref: ${{ github.event.pull_request.head.sha || github.sha }}
+        checkName: 'Build plugin (${{ matrix.plugin }})'
+        token: ${{ secrets.GITHUB_TOKEN }}
+        timeoutSeconds: 21600
+        intervalSeconds: 10
+
+    - name: Check build status
+      if: steps.check-status.outputs.conclusion != 'success'
+      run: exit 1
+
     - name: Upload
       run: |
         echo "Uploading ${{ matrix.plugin }} (but not really)"
