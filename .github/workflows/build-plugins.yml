@@ -143,6 +143,12 @@ jobs:
           path: /tmp/plugins
 
       - run: "ls /tmp/plugins"
+
+      - name: Explode artifacts
+        run: |
+          mkdir -p /tmp/output
+          cd /tmp/output
+          find /tmp/plugins -name "*.tar.gz" -type f -exec tar -xzvf {} \;
         
       - name: Zip Plugins
         run: |
