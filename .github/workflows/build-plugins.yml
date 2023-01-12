@@ -120,13 +120,16 @@ jobs:
         popd
         popd
 
-    - run: "echo $(du -h -d 1 /tmp/output)"
+    - name: Compress output
+      run: |
+        tar -czvf /tmp/${{ matrix.plugin }}.tar.gz /tmp/output/${{ matrix.plugin }}
+        echo $(du -h /tmp/${{ matrix.plugin }}.tar.gz)
 
     - name: Upload plugin artifact
       uses: actions/upload-artifact@v3
       with:
         name: ${{ matrix.plugin }}
-        path: /tmp/output/${{ matrix.plugin }}
+        path: /tmp/${{ matrix.plugin }}.tar.gz
 
   zip:
     runs-on: ubuntu-latest
@@ -137,7 +140,9 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v3
         with:
-          path: /tmp/output
+          path: /tmp/plugins
+
+      - run: "ls /tmp/plugins"
         
       - name: Zip Plugins
         run: |
