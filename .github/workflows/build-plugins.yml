@@ -120,6 +120,8 @@ jobs:
         popd
         popd
 
+    - run: "echo $(du -h -d 1 /tmp/output)"
+
     - name: Upload plugin artifact
       uses: actions/upload-artifact@v3
       with:
