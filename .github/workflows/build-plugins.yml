@@ -111,12 +111,16 @@ jobs:
 
     - name: Build plugin frontends
       run: |
+        shopt -s extglob
         pushd plugins
         plugin=${{ matrix.plugin }}
         pushd $plugin
         docker run --rm -i -v $PWD:/plugin -v /tmp/output/$plugin:/out ghcr.io/steamdeckhomebrew/builder:latest
         echo Built $plugin frontend
         ls -lla /tmp/output/$plugin
+        cd /tmp/output/$plugin
+        rm -r .pnpm-store .vscode
+        popd
         popd
         popd
 
@@ -147,9 +151,12 @@ jobs:
       - name: Explode artifacts
         run: |
           mkdir -p /tmp/output
-          cd /tmp/output
-          find /tmp/plugins -name "*.tar.gz" -type f -exec tar -xzvf {} \;
-        
+          pushd /tmp/output
+          for artifact in /tmp/plugins/*; do
+            mkdir -p `$artifact`
+            tar -xzvf $artifact
+          end
+
       - name: Zip Plugins
         run: |
           shopt -s dotglob
