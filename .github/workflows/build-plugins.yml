@@ -122,131 +122,94 @@ jobs:
         echo Built $plugin frontend
         ls -lla /tmp/output/$plugin
         cd /tmp/output/$plugin
-        rm -rf .pnpm-store .vscode
         popd
         popd
         popd
 
-    - name: Compress output
+    - name: Zip Plugins
       run: |
-        tar -czvf /tmp/${{ matrix.plugin }}.tar.gz /tmp/output/${{ matrix.plugin }}
-        echo $(du -h /tmp/${{ matrix.plugin }}.tar.gz)
+        shopt -s dotglob
+        mkdir -p /tmp/zips/
+        mkdir -p /tmp/output/
+        redtext=$'\e[1;31m'
+        end=$'\e[0m'
+        pushd /tmp/output
+        plugin=$(basename $abs_plugin)
+        zipname=/tmp/$(basename ${plugin}).zip
+        echo $plugin
+
+        # Names of the optional files (the license can either be called license or license.md, not both)
+        # (head is there to take the first file, because we're assuming there's only a single license file)
+        license="$(find $plugin -maxdepth 1 -type f \( -iname "license" -o -iname "license.md" \) -printf '%P\n' | head -n 1)"
+        readme="$(find $plugin -maxdepth 1 -type f -iname 'readme.md' -printf '%P\n')"
+        haspython="$(find $plugin -maxdepth 1 -type f -name '*.py' -printf '%P\n')"
+        # Check if plugin has a bin folder, if so, add "bin" and it's contents to root dir
+        hasbin="$(find $plugin -maxdepth 1 -type d -name 'bin' -printf '%P\n')"
+        # Check if plugin has a defaults folder, if so, add "default" contents to root dir
+        hasdefaults="$(find $plugin -maxdepth 1 -type d -name 'defaults' -printf '%P\n')"
+        if [[ "${{ secrets.STORE_ENV }}" == "testing" ]]; then
+          long_sha="${{ github.event.pull_request.head.sha || github.sha }}"
+          sha=$(echo $long_sha | cut -c1-7)
+          cat $plugin/package.json | jq --arg jqsha "$sha" '.version |= . + "-" + $jqsha' | sudo tee $plugin/$sha-package.json
+          sudo mv $plugin/$sha-package.json $plugin/package.json
+        fi
+        # Add required plugin files (and directory) to zip file
+        echo "$plugin/dist $plugin/plugin.json $plugin/package.json"
+        zip -r $zipname "$plugin/dist" "$plugin/plugin.json" "$plugin/package.json"
+        if [ ! -z "$hasbin" ]; then
+          echo "$plugin/bin"
+          zip -r $zipname "$plugin/bin"
+        fi
+
+        if [ ! -z "$haspython" ]; then
+          echo "$plugin/*.py"
+          find $plugin -maxdepth 1 -type f -name '*.py' -exec zip -r $zipname {} \;
+        fi
+
+        if [ ! -z "$hasdefaults" ]; then
+          export workingdir=$PWD
+          cd $plugin/defaults
+          export plugin="$plugin"
+          export zipname="$zipname"
+          if [ ! -f "defaults.txt" ]; then
+            find . -mindepth 1 -type d,f -name '*' -exec bash -c '
+              for object do
+                outdir="/tmp/output"
+                name="$(basename $object)"
+                # echo "object = $object, name = $name"
+                if [ -e "$object" ]; then
+                  sudo mv "$object" $outdir/$plugin/$name
+                  moved="$?"
+                  # echo "moved = $moved"
+                  cd $workingdir
+                  if [ "$moved" = "0" ]; then
+                    zip -r $zipname $plugin/$name
+                  fi
+                fi
+              done
+            ' find-sh {} + ;
+          else
+            if [[ ! "$plugin" =~ "plugin-template" ]]; then
+              printf "${red}defaults.txt found in defaults folder, please remove either defaults.txt or the defaults folder.${end}\n"
+            else
+              printf "plugin template, allowing defaults.txt\n"
+            fi
+          fi
+          cd "$workingdir"
+        fi
+
+        # Check if other files exist, and if they do, add them
+        echo "license:$plugin/$license readme:$plugin/$readme"
+        if [ ! -z "$license" ]; then
+          zip -r $zipname "$plugin/$license"
+        fi
+        if [ ! -z "$readme" ]; then
+          zip -r $zipname "$plugin/$readme"
+        fi
+        popd
 
     - name: Upload plugin artifact
       uses: actions/upload-artifact@v3
       with:
         name: ${{ matrix.plugin }}
-        path: /tmp/${{ matrix.plugin }}.tar.gz
-
-  zip:
-    runs-on: ubuntu-latest
-    needs:
-      - build
-
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v3
-        with:
-          path: /tmp/plugins
-
-      - run: "ls /tmp/plugins"
-
-      - name: Explode artifacts
-        run: |
-          mkdir -p /tmp/output
-          pushd /tmp/output
-          for artifact in /tmp/plugins/*; do
-            mkdir -p `$artifact`
-            tar -xzvf $artifact
-          end
-
-      - name: Zip Plugins
-        run: |
-          shopt -s dotglob
-          mkdir -p /tmp/zips/
-          mkdir -p /tmp/output/
-          redtext=$'\e[1;31m'
-          end=$'\e[0m'
-          pushd /tmp/output
-          for abs_plugin in /tmp/output/*; do
-            plugin=$(basename $abs_plugin)
-            zipname=/tmp/zips/$(basename ${plugin}).zip
-            echo $plugin
-
-            # Names of the optional files (the license can either be called license or license.md, not both)
-            # (head is there to take the first file, because we're assuming there's only a single license file)
-            license="$(find $plugin -maxdepth 1 -type f \( -iname "license" -o -iname "license.md" \) -printf '%P\n' | head -n 1)"
-            readme="$(find $plugin -maxdepth 1 -type f -iname 'readme.md' -printf '%P\n')"
-            haspython="$(find $plugin -maxdepth 1 -type f -name '*.py' -printf '%P\n')"
-            # Check if plugin has a bin folder, if so, add "bin" and it's contents to root dir
-            hasbin="$(find $plugin -maxdepth 1 -type d -name 'bin' -printf '%P\n')"
-            # Check if plugin has a defaults folder, if so, add "default" contents to root dir
-            hasdefaults="$(find $plugin -maxdepth 1 -type d -name 'defaults' -printf '%P\n')"
-            if [[ "${{ secrets.STORE_ENV }}" == "testing" ]]; then
-              long_sha="${{ github.event.pull_request.head.sha || github.sha }}"
-              sha=$(echo $long_sha | cut -c1-7)
-              cat $plugin/package.json | jq --arg jqsha "$sha" '.version |= . + "-" + $jqsha' | sudo tee $plugin/$sha-package.json
-              sudo mv $plugin/$sha-package.json $plugin/package.json
-            fi
-            # Add required plugin files (and directory) to zip file
-            echo "$plugin/dist $plugin/plugin.json $plugin/package.json"
-            zip -r $zipname "$plugin/dist" "$plugin/plugin.json" "$plugin/package.json"
-            if [ ! -z "$hasbin" ]; then
-              echo "$plugin/bin"
-              zip -r $zipname "$plugin/bin"
-            fi
-
-            if [ ! -z "$haspython" ]; then
-              echo "$plugin/*.py"
-              find $plugin -maxdepth 1 -type f -name '*.py' -exec zip -r $zipname {} \;
-            fi
-
-            if [ ! -z "$hasdefaults" ]; then
-              export workingdir=$PWD
-              cd $plugin/defaults
-              export plugin="$plugin"
-              export zipname="$zipname"
-              if [ ! -f "defaults.txt" ]; then
-                find . -mindepth 1 -type d,f -name '*' -exec bash -c '
-                  for object do
-                    outdir="/tmp/output"
-                    name="$(basename $object)"
-                    # echo "object = $object, name = $name"
-                    if [ -e "$object" ]; then
-                      sudo mv "$object" $outdir/$plugin/$name
-                      moved="$?"
-                      # echo "moved = $moved"
-                      cd $workingdir
-                      if [ "$moved" = "0" ]; then
-                        zip -r $zipname $plugin/$name
-                      fi
-                    fi
-                  done
-                ' find-sh {} + ;
-              else
-                if [[ ! "$plugin" =~ "plugin-template" ]]; then
-                  printf "${red}defaults.txt found in defaults folder, please remove either defaults.txt or the defaults folder.${end}\n"
-                else
-                  printf "plugin template, allowing defaults.txt\n"
-                fi
-              fi
-              cd "$workingdir"
-            fi
-
-            # Check if other files exist, and if they do, add them
-            echo "license:$plugin/$license readme:$plugin/$readme"
-            if [ ! -z "$license" ]; then
-              zip -r $zipname "$plugin/$license"
-            fi
-            if [ ! -z "$readme" ]; then
-              zip -r $zipname "$plugin/$readme"
-            fi
-          done
-          popd
-
-      - name: Upload Artifacts to Github
-        if: ${{ !env.ACT }}
-        uses: actions/upload-artifact@3cea5372237819ed00197afe530f5a7ea3e805c8
-        with:
-          name: plugins
-          path: /tmp/zips/*
+        path: /tmp/${{ matrix.plugin }}.zip
