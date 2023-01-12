@@ -124,7 +124,6 @@ jobs:
         cd /tmp/output/$plugin
         popd
         popd
-        popd
 
     - name: Zip Plugins
       run: |
