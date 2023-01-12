@@ -46,6 +46,8 @@ jobs:
     strategy:
       matrix:
         plugin: ${{ fromJSON(needs.find_plugins.outputs.plugins) }}
+    outputs:
+      name: ${{ steps.set_name.outputs.name }}
 
     steps:
     - name: Checkout
@@ -212,3 +214,18 @@ jobs:
       with:
         name: ${{ matrix.plugin }}
         path: /tmp/${{ matrix.plugin }}.zip
+
+  upload:
+    runs-on: ubuntu-latest
+    needs:
+      - find_plugins
+      - build
+    environment:
+      name: ${{ (github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.upload))) && 'env' || 'testing_env' }}
+    strategy:
+      matrix:
+        plugin: ${{ fromJSON(needs.find_plugins.outputs.plugins) }}
+    steps:
+    - name: Upload
+      run: |
+        echo "Uploading ${{ matrix.plugin }} (but not really)"
