@@ -122,7 +122,7 @@ jobs:
         echo Built $plugin frontend
         ls -lla /tmp/output/$plugin
         cd /tmp/output/$plugin
-        rm -r .pnpm-store .vscode
+        rm -rf .pnpm-store .vscode
         popd
         popd
         popd
