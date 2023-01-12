@@ -229,7 +229,7 @@ jobs:
         echo "${JSON}"
         echo "env=${JSON}" >> $GITHUB_OUTPUT
       env:
-        JSON=${{ toJSON(secrets) }}
+        JSON: ${{ toJSON(secrets) }}
 
   upload:
     runs-on: ubuntu-latest
