@@ -227,7 +227,7 @@ jobs:
       name: Get environment secrets
       run: |
         echo "${JSON}"
-        echo "env=${JSON}" >> $GITHUB_OUTPUT
+        echo "env='${JSON}'" >> $GITHUB_OUTPUT
       env:
         JSON: ${{ toJSON(secrets) }}
 
