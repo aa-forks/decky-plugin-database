@@ -133,8 +133,8 @@ jobs:
         redtext=$'\e[1;31m'
         end=$'\e[0m'
         pushd /tmp/output
-        plugin=$(basename $abs_plugin)
-        zipname=/tmp/$(basename ${plugin}).zip
+        plugin=$(basename ${{ matrix.plugin }})
+        zipname=/tmp/$plugin.zip
         echo $plugin
 
         # Names of the optional files (the license can either be called license or license.md, not both)
