@@ -226,7 +226,7 @@ jobs:
       matrix:
         plugin: ${{ fromJSON(needs.find_plugins.outputs.plugins) }}
     steps:
-    - name: Wait for build to succeed
+    - name: Wait for build to finish
       id: check-status
       uses: fountainhead/action-wait-for-check@v1.1.0
       with:
@@ -236,9 +236,9 @@ jobs:
         timeoutSeconds: 21600
         intervalSeconds: 10
 
-    - name: Check build status
+    - name: Exit if build failed
       if: steps.check-status.outputs.conclusion != 'success'
-      run: exit 1
+      run: echo "Build failed." && exit 1
 
     - name: Upload
       run: |
