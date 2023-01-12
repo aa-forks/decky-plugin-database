@@ -226,8 +226,10 @@ jobs:
     - id: get_env_secrets
       name: Get environment secrets
       run: |
-        echo "${{ toJSON(secrets) }}"
-        echo "env=${{ toJSON(secrets) }}" >> $GITHUB_OUTPUT
+        echo "${JSON}"
+        echo "env=${JSON}" >> $GITHUB_OUTPUT
+      env:
+        JSON=${{ toJSON(secrets) }}
 
   upload:
     runs-on: ubuntu-latest
